@@ -26,45 +26,49 @@ VITE_SUPABASE_ANON_KEY=tu-clave-anonima-publica
 ```
 
 ### 2. Instalación de Dependencias
-Como la ejecución de comandos `npm` debe realizarse bajo entornos controlados, puedes instalar las dependencias usando una imagen de Docker:
+Para el entorno de desarrollo local, puedes instalar las dependencias de Node.js de forma aislada dentro de un contenedor utilizando el comando Makefile:
 
 ```bash
-docker run --rm -v ${PWD}:/app -w /app/client-app node:20-alpine npm install
-```
-
-Si prefieres instalar localmente en tu sistema (si cuentas con Node.js v20+):
-```bash
-npm install
+make dev-install
 ```
 
 ---
 
-## 🚀 Ejecución en Desarrollo y Producción
+## 🚀 Flujo de Desarrollo (Desarrollo Local)
 
-### Servidor de Desarrollo Local
-Para iniciar el entorno de desarrollo y probar la interfaz en tiempo real (disponible en `http://localhost:5173`):
+Para la fase de desarrollo, la ejecución, instalación y auditorías de código se gestionan de forma nativa a través del archivo **`Makefile`**:
 
-*Usando Docker:*
+### Iniciar Servidor de Desarrollo
+Inicia el entorno de desarrollo con recarga en vivo (live reload). El puerto expuesto por defecto en el host es el `5173` (`http://localhost:5173`):
 ```bash
-docker run --rm -it -v ${PWD}:/app -w /app/client-app -p 5173:5173 node:20-alpine npm run dev -- --host
+make dev-run
 ```
 
-*Usando el sistema local:*
+### Auditorías de Dependencias (npm audit)
+Para auditar las dependencias del proyecto en busca de vulnerabilidades antes de subirlas al repositorio:
 ```bash
-npm run dev
+make audit
 ```
 
-### Compilación para Producción (Build)
-Vite compilará y optimizará el código fuente, generando los archivos HTML/CSS/JS estáticos listos para producción dentro del directorio `dist/`:
+---
 
-*Usando Docker:*
+## 🚀 Flujo de CI/CD y Producción (Dockerfile)
+
+Para los flujos de integración continua (CI/CD) y despliegue final en producción, el proyecto se empaqueta en una imagen Docker optimizada utilizando el archivo **`Dockerfile`**:
+
+### 1. Construcción de la Imagen (CI/CD)
+El flujo de CI/CD construye la imagen del cliente pasando las claves de Supabase como argumentos de compilación (compilación estática de Vite):
 ```bash
-docker run --rm -v ${PWD}:/app -w /app/client-app node:20-alpine npm run build
+docker build \
+  --build-arg VITE_SUPABASE_URL="https://tu-proyecto.supabase.co" \
+  --build-arg VITE_SUPABASE_ANON_KEY="tu-clave-anonima-publica" \
+  -t client-app .
 ```
 
-*Usando el sistema local:*
+### 2. Ejecución del Contenedor de Producción
+Inicia la aplicación de producción servida de manera ligera y ultrarrápida a través de **Nginx Alpine** en el puerto `8080` (o el puerto de tu servidor de producción):
 ```bash
-npm run build
+docker run -d -p 8080:80 client-app
 ```
 
 ---
