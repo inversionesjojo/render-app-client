@@ -3,6 +3,7 @@
     ref="meshRef" 
     :geometry="resolvedGeometry" 
     :scale="[scaleFactor, scaleFactor, scaleFactor]"
+    :rotation="meshRotation"
     cast-shadow 
     receive-shadow
   >
@@ -31,6 +32,18 @@ const props = defineProps({
   color: {
     type: String,
     default: '#8b5cf6'
+  },
+  orientation: {
+    type: String,
+    default: 'z-up' // 'z-up' (CAD/3D print default) or 'original'
+  },
+  yaw: {
+    type: Number,
+    default: 0
+  },
+  flip: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -38,6 +51,17 @@ const emit = defineEmits(['model-loaded'])
 
 const meshRef = ref(null)
 const scaleFactor = ref(1)
+
+// Compute rotation based on CAD Z-Up orientation vs original Three.js Y-Up
+const meshRotation = computed(() => {
+  const flipOffset = props.flip ? Math.PI : 0
+  if (props.orientation === 'original') {
+    return [flipOffset, props.yaw, 0]
+  }
+  // CAD models (Z-up): -90 deg on X aligns CAD Z to Three.js Y (upright)
+  // Local Z corresponds to world vertical Y, so yaw is placed in Z
+  return [-Math.PI / 2 + flipOffset, 0, props.yaw]
+})
 
 // Load geometry using TresJS useLoader and Three.js STLLoader
 const geometry = await useLoader(STLLoader, props.url)

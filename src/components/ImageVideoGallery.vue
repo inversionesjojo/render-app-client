@@ -48,7 +48,18 @@
             </span>
             <span class="media-size">{{ formatSize(item.size) }}</span>
           </div>
-          <p class="media-name">{{ item.name }}</p>
+          <div class="media-title-row">
+            <p class="media-name" :title="item.name">{{ item.name }}</p>
+            <button 
+              class="card-download-btn"
+              :class="{ 'loading': downloadingId === (item.id || item.url) }"
+              @click.stop="handleDownload(item)"
+              :title="`Descargar ${item.name}`"
+            >
+              <svg v-if="downloadingId !== (item.id || item.url)" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span v-else class="btn-spinner"></span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -56,8 +67,22 @@
     <!-- Lightbox Modal Overlay -->
     <Transition name="fade">
       <div v-if="lightboxActive" class="lightbox" @click.self="closeLightbox">
-        <div class="lightbox-close" @click="closeLightbox">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <!-- Top Right Actions: Download & Close -->
+        <div class="lightbox-header-actions">
+          <button 
+            v-if="activeItem"
+            class="lightbox-download-action-btn"
+            :class="{ 'loading': downloadingId === (activeItem.id || activeItem.url) }"
+            @click.stop="handleDownload(activeItem)"
+            :title="`Descargar ${activeItem.name}`"
+          >
+            <svg v-if="downloadingId !== (activeItem.id || activeItem.url)" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span v-else class="btn-spinner"></span>
+            <span>Descargar</span>
+          </button>
+          <div class="lightbox-close" @click="closeLightbox" title="Cerrar (Esc)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </div>
         </div>
 
         <!-- Navigation Buttons -->
@@ -95,6 +120,14 @@
                 <span class="media-type-badge" :class="activeItem.type">{{ activeItem.type.toUpperCase() }}</span>
                 <span class="lightbox-title">{{ activeItem.name }}</span>
                 <span class="lightbox-index">{{ activeIndex + 1 }} / {{ mediaList.length }}</span>
+                <button 
+                  class="lightbox-caption-download"
+                  @click.stop="handleDownload(activeItem)"
+                  title="Descargar archivo"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Bajar</span>
+                </button>
               </div>
             </div>
           </Transition>
@@ -106,6 +139,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { downloadResource } from '../utils/download'
 
 const props = defineProps({
   mediaList: {
@@ -116,11 +150,23 @@ const props = defineProps({
 
 const lightboxActive = ref(false)
 const activeIndex = ref(0)
+const downloadingId = ref(null)
 
 const activeItem = computed(() => {
   if (props.mediaList.length === 0) return null
   return props.mediaList[activeIndex.value]
 })
+
+const handleDownload = async (item) => {
+  if (!item || !item.url) return
+  const id = item.id || item.url
+  downloadingId.value = id
+  try {
+    await downloadResource(item.url, item.name || 'recurso')
+  } finally {
+    downloadingId.value = null
+  }
+}
 
 const openLightbox = (index) => {
   activeIndex.value = index
@@ -354,6 +400,41 @@ const formatSize = (bytes) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+}
+
+.media-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-download-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.card-download-btn:hover {
+  color: #ffffff;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  transform: scale(1.08);
+}
+
+.card-download-btn.loading {
+  pointer-events: none;
+  opacity: 0.8;
 }
 
 /* Lightbox Modal */
@@ -369,10 +450,75 @@ const formatSize = (bytes) => {
   padding: 40px;
 }
 
-.lightbox-close {
+.lightbox-header-actions {
   position: absolute;
   top: 24px;
   right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 110;
+}
+
+.lightbox-download-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.25);
+  transition: all var(--transition-fast);
+}
+
+.lightbox-download-action-btn:hover {
+  background: var(--accent-primary);
+  box-shadow: 0 4px 18px var(--accent-primary-glow);
+  transform: translateY(-2px);
+}
+
+.lightbox-download-action-btn.loading {
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.lightbox-caption-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: all var(--transition-fast);
+}
+
+.lightbox-caption-download:hover {
+  color: #ffffff;
+  background: var(--accent-primary);
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.lightbox-close {
   color: var(--text-secondary);
   cursor: pointer;
   padding: 8px;
@@ -514,9 +660,14 @@ const formatSize = (bytes) => {
   }
   .prev-btn { left: 8px; }
   .next-btn { right: 8px; }
-  .lightbox-close {
-    top: 16px;
-    right: 16px;
+  .lightbox-header-actions {
+    top: 14px;
+    right: 14px;
+    gap: 8px;
+  }
+  .lightbox-download-action-btn {
+    padding: 6px 12px;
+    font-size: 12px;
   }
 }
 </style>
