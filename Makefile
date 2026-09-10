@@ -5,7 +5,7 @@ dev-install:
 	node:20-alpine npm i
 
 dev-run:
-	docker run --rm \
+	docker run --rm --name web-render-client \
 	-v ${PWD}:/app \
 	-p 5173:5173 \
 	-w /app \

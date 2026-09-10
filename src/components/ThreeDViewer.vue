@@ -61,6 +61,7 @@
         <Suspense>
           <template #default>
             <STLModel 
+              :key="(currentModel.id || currentModel.url) + '_' + activeModelIndex + '_' + reloadTrigger"
               :url="currentModel.url"
               :material-style="materialPreset"
               :color="selectedColor"
@@ -68,6 +69,7 @@
               :yaw="modelYaw"
               :flip="modelFlip"
               @model-loaded="handleModelLoaded"
+              @model-error="handleModelError"
             />
           </template>
           <template #fallback>
@@ -80,10 +82,22 @@
         </Suspense>
       </TresCanvas>
 
-      <!-- Floating Absolute Loading Overlay -->
-      <div v-if="isModelLoading" class="canvas-loader-overlay">
-        <div class="spinner-large"></div>
-        <p>Procesando geometría 3D CAD...</p>
+      <!-- Floating Absolute Loading / Error Overlay -->
+      <div v-if="isModelLoading || modelLoadError" class="canvas-loader-overlay">
+        <template v-if="modelLoadError">
+          <div class="error-badge-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <p class="error-load-title">Error al cargar modelo 3D</p>
+          <p class="error-load-text">{{ modelLoadError }}</p>
+          <button class="btn btn-primary canvas-retry-btn" @click="retryLoadModel">
+            Reintentar
+          </button>
+        </template>
+        <template v-else>
+          <div class="spinner-large"></div>
+          <p>Procesando geometría 3D CAD...</p>
+        </template>
       </div>
 
       <!-- Mobile Top Bar: Quick Panel Toggles for Small Screens -->
@@ -377,6 +391,8 @@ const orbitControlsRef = ref(null)
 const activeModelIndex = ref(0)
 const isModelLoading = ref(true)
 const modelStats = ref(null)
+const modelLoadError = ref(null)
+const reloadTrigger = ref(0)
 const isDownloadingModel = ref(false)
 
 const handleDownloadModel = async () => {
@@ -478,11 +494,28 @@ const currentModel = computed(() => {
 watch(activeModelIndex, () => {
   isModelLoading.value = true
   modelStats.value = null
+  modelLoadError.value = null
+  modelYaw.value = 0
+  modelFlip.value = false
 })
 
 const handleModelLoaded = (stats) => {
   modelStats.value = stats
+  modelLoadError.value = null
   isModelLoading.value = false
+}
+
+const handleModelError = (err) => {
+  console.error('Error cargando modelo 3D:', err)
+  modelStats.value = null
+  isModelLoading.value = false
+  modelLoadError.value = 'No se pudo cargar el archivo 3D seleccionado.'
+}
+
+const retryLoadModel = () => {
+  modelLoadError.value = null
+  isModelLoading.value = true
+  reloadTrigger.value++
 }
 
 // Helper to safely extract OrbitControls instance from ref
@@ -747,6 +780,38 @@ onUnmounted(() => {
   border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+.error-badge-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 50%;
+  margin-bottom: -4px;
+}
+
+.error-load-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.error-load-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: center;
+  max-width: 280px;
+}
+
+.canvas-retry-btn {
+  margin-top: 4px;
+  padding: 8px 18px;
+  font-size: 13px;
 }
 
 /* Mobile Quick Toggles (Top Corners) */

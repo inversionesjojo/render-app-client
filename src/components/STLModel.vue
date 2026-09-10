@@ -1,5 +1,6 @@
 <template>
   <TresMesh 
+    v-if="resolvedGeometry"
     ref="meshRef" 
     :geometry="resolvedGeometry" 
     :scale="[scaleFactor, scaleFactor, scaleFactor]"
@@ -47,7 +48,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['model-loaded'])
+const emit = defineEmits(['model-loaded', 'model-error'])
 
 const meshRef = ref(null)
 const scaleFactor = ref(1)
@@ -63,8 +64,8 @@ const meshRotation = computed(() => {
   return [-Math.PI / 2 + flipOffset, 0, props.yaw]
 })
 
-// Load geometry using TresJS useLoader and Three.js STLLoader
-const geometry = await useLoader(STLLoader, props.url)
+// Load geometry using TresJS useLoader with reactive URL getter and Three.js STLLoader
+const geometry = await useLoader(STLLoader, () => props.url)
 
 // Safely extract the raw BufferGeometry from whatever format useLoader resolves to
 const resolvedGeometry = computed(() => {
@@ -120,15 +121,19 @@ const materialProps = computed(() => {
   }
 })
 
+// Watch for loading errors
+watchEffect(() => {
+  const resolved = unref(geometry)
+  if (resolved?.error?.value) {
+    console.error('Error loading STL geometry:', resolved.error.value)
+    emit('model-error', resolved.error.value)
+  }
+})
+
+// Process loaded geometry and emit dimensions
 watchEffect(() => {
   const geom = resolvedGeometry.value
-  console.log('DEBUG_GEOM_OBJECT:', geom)
   if (geom) {
-    console.log('DEBUG_GEOM_CONSTRUCTOR:', geom.constructor ? geom.constructor.name : 'no-constructor')
-    console.log('DEBUG_GEOM_CENTER_TYPE:', typeof geom.center)
-    console.log('DEBUG_GEOM_IS_BUFFERGEOMETRY:', geom.isBufferGeometry)
-    console.log('DEBUG_GEOM_KEYS:', Object.keys(geom))
-    
     if (typeof geom.center === 'function') {
       // 1. Center geometry to local origin so rotation is clean
       geom.center()
