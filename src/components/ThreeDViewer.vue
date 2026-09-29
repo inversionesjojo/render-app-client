@@ -50,8 +50,17 @@
         
         <!-- Lights -->
         <TresAmbientLight :intensity="ambientIntensity" />
-        <TresDirectionalLight :position="[8, 12, 8]" :intensity="1.5" cast-shadow />
-        <TresDirectionalLight :position="[-8, -8, -8]" :intensity="0.6" />
+        <TresDirectionalLight 
+          ref="mainLightRef"
+          :position="mainLightPosition" 
+          :intensity="1.5" 
+          cast-shadow 
+        />
+        <TresDirectionalLight 
+          ref="fillLightRef"
+          :position="fillLightPosition" 
+          :intensity="0.6" 
+        />
         <TresPointLight :position="[0, 5, 0]" :intensity="0.5" />
         
         <!-- Grid Helper -->
@@ -169,7 +178,7 @@
               @click="modelOrientation = 'z-up'"
               title="Orientación CAD / Impresión 3D (Z vertical erguido)"
             >
-              CAD Z-UP (ERTO)
+              CAD Z-UP (VERTICAL)
             </button>
             <button 
               class="preset-btn"
@@ -212,8 +221,40 @@
         </div>
 
         <div class="panel-section lighting-controls">
-          <h3>Luz Ambiental</h3>
-          <div class="slider-wrapper">
+          <h3>Iluminación</h3>
+          
+          <div class="light-pos-section">
+            <span class="light-sublabel">Posición de la Luz (Eje Lateral)</span>
+            <div class="preset-selector">
+              <button 
+                class="preset-btn"
+                :class="{ 'active': lightPosition === 'lateral' }"
+                @click="setLightPosition('lateral')"
+                title="Luz lateral derecha (Original)"
+              >
+                Lateral
+              </button>
+              <button 
+                class="preset-btn"
+                :class="{ 'active': lightPosition === 'center' }"
+                @click="setLightPosition('center')"
+                title="Luz centrada (sin cambiar el eje)"
+              >
+                Centro
+              </button>
+              <button 
+                class="preset-btn"
+                :class="{ 'active': lightPosition === 'opposite' }"
+                @click="setLightPosition('opposite')"
+                title="Luz en el lado contrario (sin cambiar el eje)"
+              >
+                Contrario
+              </button>
+            </div>
+          </div>
+
+          <div class="slider-wrapper light-slider-mt">
+            <span class="slider-label">Luz Ambiental</span>
             <input type="range" min="0.2" max="2" step="0.1" v-model.number="ambientIntensity" class="slider" />
             <span class="value-display">{{ ambientIntensity }}x</span>
           </div>
@@ -269,6 +310,12 @@
         <span class="mode-text">
           {{ touchMode === 'pan' ? 'Modo Desplazamiento (1 dedo arrastra)' : 'Modo Rotación (1 dedo gira)' }}
         </span>
+      </div>
+
+      <!-- Temporary Light Position Badge Feedback -->
+      <div v-if="lightFeedbackNotice" class="light-feedback-badge animate-fade-in">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M2 12h2"/><path d="M20 12h2"/></svg>
+        <span>{{ lightFeedbackNotice }}</span>
       </div>
 
       <!-- Directional Nudge Pad (Pop-up for fine tactile displacement) -->
@@ -340,6 +387,26 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
           </button>
 
+          <!-- Light Position Toggle Button -->
+          <button 
+            class="touch-action-btn" 
+            :class="{ 'active': lightPosition !== 'lateral' }"
+            @click="cycleLightPosition" 
+            :title="`Posición de luz: ${lightPositionLabel} (clic: Lateral → Centro → Contrario)`"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2"/>
+              <path d="M12 20v2"/>
+              <path d="m4.93 4.93 1.41 1.41"/>
+              <path d="m17.66 17.66 1.41 1.41"/>
+              <path d="M2 12h2"/>
+              <path d="M20 12h2"/>
+              <path d="m6.34 17.66-1.41 1.41"/>
+              <path d="m19.07 4.93-1.41 1.41"/>
+            </svg>
+          </button>
+
           <!-- Download Model Button -->
           <button 
             v-if="currentModel"
@@ -387,6 +454,8 @@ const viewerContainerRef = ref(null)
 const canvasWrapperRef = ref(null)
 const cameraRef = ref(null)
 const orbitControlsRef = ref(null)
+const mainLightRef = ref(null)
+const fillLightRef = ref(null)
 
 const activeModelIndex = ref(0)
 const isModelLoading = ref(true)
@@ -435,6 +504,66 @@ const autoRotate = ref(true)
 const autoRotateSpeed = ref(2.0)
 const showGrid = ref(true)
 const ambientIntensity = ref(0.8)
+
+// Lighting position parameters
+// Options: 'lateral' (Right side, X=+8, original default), 'center' (Centered on X=0), 'opposite' (Left side, X=-8)
+const lightPosition = ref('lateral')
+const lightFeedbackNotice = ref('')
+let lightFeedbackTimeout = null
+
+const showLightNotice = (text) => {
+  lightFeedbackNotice.value = text
+  if (lightFeedbackTimeout) clearTimeout(lightFeedbackTimeout)
+  lightFeedbackTimeout = setTimeout(() => {
+    lightFeedbackNotice.value = ''
+  }, 1800)
+}
+
+const lightX = computed(() => {
+  if (lightPosition.value === 'center') return 0
+  if (lightPosition.value === 'opposite') return -8
+  return 8 // 'lateral'
+})
+
+const mainLightPosition = computed(() => [lightX.value, 12, 8])
+const fillLightPosition = computed(() => [-lightX.value, -8, -8])
+
+const lightPositionLabel = computed(() => {
+  if (lightPosition.value === 'center') return 'Centro'
+  if (lightPosition.value === 'opposite') return 'Lado Contrario'
+  return 'Lateral'
+})
+
+const setLightPosition = (pos) => {
+  lightPosition.value = pos
+  showLightNotice(`Luz: ${lightPositionLabel.value}`)
+}
+
+const cycleLightPosition = () => {
+  if (lightPosition.value === 'lateral') {
+    lightPosition.value = 'center'
+  } else if (lightPosition.value === 'center') {
+    lightPosition.value = 'opposite'
+  } else {
+    lightPosition.value = 'lateral'
+  }
+  showLightNotice(`Luz: ${lightPositionLabel.value}`)
+}
+
+// Sync directly with Three.js DirectionalLight instances if needed
+watch(mainLightPosition, (pos) => {
+  const light = unref(mainLightRef)
+  if (light && light.position && typeof light.position.set === 'function') {
+    light.position.set(pos[0], pos[1], pos[2])
+  }
+})
+
+watch(fillLightPosition, (pos) => {
+  const light = unref(fillLightRef)
+  if (light && light.position && typeof light.position.set === 'function') {
+    light.position.set(pos[0], pos[1], pos[2])
+  }
+})
 const materialPreset = ref('matte')
 const selectedColor = ref('#8b5cf6')
 
@@ -651,6 +780,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFullscreenChange)
+  if (lightFeedbackTimeout) clearTimeout(lightFeedbackTimeout)
 })
 </script>
 
@@ -853,14 +983,14 @@ onUnmounted(() => {
   position: absolute;
   top: 20px;
   left: 20px;
-  width: 250px;
-  padding: 20px;
+  width: 320px;
+  padding: 18px 20px;
   z-index: 20;
   border-radius: var(--border-radius-md);
   box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   max-height: calc(100% - 40px);
   overflow-y: auto;
 }
@@ -919,16 +1049,17 @@ onUnmounted(() => {
 .preset-btn {
   flex: 1;
   font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-secondary);
   background: transparent;
   border: none;
-  padding: 6px;
+  padding: 6px 3px;
   border-radius: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
   text-align: center;
+  white-space: nowrap;
 }
 
 .preset-btn:hover {
@@ -1055,7 +1186,7 @@ onUnmounted(() => {
   position: absolute;
   top: 20px;
   right: 20px;
-  width: 240px;
+  width: 260px;
   padding: 16px;
   z-index: 20;
   border-radius: var(--border-radius-md);
@@ -1190,6 +1321,47 @@ onUnmounted(() => {
 .mode-dot.pan {
   background: var(--accent-secondary);
   box-shadow: 0 0 8px var(--accent-secondary);
+}
+
+/* Light Feedback Floating Badge */
+.light-feedback-badge {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(11, 15, 25, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  color: #ffffff;
+  pointer-events: none;
+  z-index: 18;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.light-feedback-badge svg {
+  color: var(--accent-secondary);
+}
+
+.light-pos-section {
+  margin-bottom: 8px;
+}
+
+.light-sublabel {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.light-slider-mt {
+  margin-top: 10px;
 }
 
 /* Directional Nudge Pad */
@@ -1408,7 +1580,8 @@ onUnmounted(() => {
     top: 56px;
     bottom: auto;
     left: 12px;
-    width: 260px;
+    width: 320px;
+    max-width: calc(100% - 24px);
     max-height: calc(100% - 130px);
     overflow-y: auto;
     z-index: 30;
@@ -1417,7 +1590,8 @@ onUnmounted(() => {
     top: 56px;
     bottom: auto;
     right: 12px;
-    width: 260px;
+    width: 280px;
+    max-width: calc(100% - 24px);
     max-height: calc(100% - 130px);
     overflow-y: auto;
     z-index: 30;
