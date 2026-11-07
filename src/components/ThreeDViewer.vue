@@ -500,7 +500,7 @@ const toggleFlip = () => {
 }
 
 // Render parameters
-const autoRotate = ref(true)
+const autoRotate = ref(false)
 const autoRotateSpeed = ref(2.0)
 const showGrid = ref(true)
 const ambientIntensity = ref(0.8)
